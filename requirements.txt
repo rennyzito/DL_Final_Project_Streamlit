@@ -6,3 +6,4 @@ joblib~=1.5.2
 matplotlib~=3.10.5
 scikit-learn~=1.7.2
 tensorflow
+keras
