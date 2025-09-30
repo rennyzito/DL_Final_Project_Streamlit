@@ -72,7 +72,7 @@ baseline_mlp_model.compile(optimizer='adam', loss='binary_crossentropy', metrics
 baseline_mlp_model.fit(X_train_scaled, Y_train_base, epochs=100, verbose=0)
 
 # Save the model with the new name
-baseline_mlp_model.save('baseline_mlp_model.keras')
+baseline_mlp_model.save('baseline_mlp_model.h5')
 
 print("   -> Saved baseline model as baseline_mlp_model.keras")
 
@@ -130,8 +130,8 @@ dl_mlp_model.fit(
 
 # Save DL components
 print("5. Saving DL Encoder and MLP Classifier...")
-dl_encoder.save('dl_encoder.keras')
-dl_mlp_model.save('dl_mlp_model.keras')
+dl_encoder.save('dl_encoder.h5')
+dl_mlp_model.save('dl_mlp_model.h5')
 
 
 # --- Save Scaler ---

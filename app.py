@@ -11,11 +11,10 @@ FEATURE_COLS = ["gold_diff", "exp_diff", "kills_diff", "dragons_diff", "deaths_d
 
 try:
     # 🔴 CHANGE 1: Load the new Keras Baseline MLP model
-    BASELINE_MODEL = keras.models.load_model('baseline_mlp_model.keras')
+    BASELINE_MODEL = keras.models.load_model('baseline_mlp_model.h5')
     X_SCALER = joblib.load('x_scaler.joblib')
-
-    DL_ENCODER = keras.models.load_model('dl_encoder.keras')
-    DL_MLP_MODEL = keras.models.load_model('dl_mlp_model.keras')
+    DL_ENCODER = keras.models.load_model('dl_encoder.h5')
+    DL_MLP_MODEL = keras.models.load_model('dl_mlp_model.h5')
 
 except FileNotFoundError as e:
     st.error(
