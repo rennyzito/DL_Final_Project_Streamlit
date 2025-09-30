@@ -1,31 +1,21 @@
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'
 import streamlit as st
 import pandas as pd
 import numpy as np
 import keras
 import joblib
 
-# --- Configuration (must match train_and_save.py) ---
+# --- Configuration ---
 FEATURE_COLS = ["gold_diff", "exp_diff", "kills_diff", "dragons_diff", "deaths_diff"]
 
 # --- Load Models (Global Loading for Max Speed) ---
 
-# The most common point of failure is here. We load the heavy Keras models
-# outside of any Streamlit function to ensure they load only once when the
-# script is read, not on every user interaction/refresh.
-
 try:
-    # Load scikit-learn objects (Logistic Regression and StandardScaler)
-    BASELINE_MODEL = joblib.load('logistic_regression_model.joblib')
+    # 🔴 CHANGE 1: Load the new Keras Baseline MLP model
+    BASELINE_MODEL = keras.models.load_model('baseline_mlp_model.keras')
     X_SCALER = joblib.load('x_scaler.joblib')
 
-    # Load Keras models - These lines are the slow part if uncached
     DL_ENCODER = keras.models.load_model('dl_encoder.keras')
     DL_MLP_MODEL = keras.models.load_model('dl_mlp_model.keras')
-
-    # Use a dummy variable for the successful loaded state
-    MODELS_LOADED_SUCCESSFULLY = True
 
 except FileNotFoundError as e:
     st.error(
@@ -38,36 +28,43 @@ except Exception as e:
 
 # --- Prediction and Helper Functions (Use st.cache_data) ---
 
-# --- Prediction and Helper Functions (Use st.cache_data) ---
-
 @st.cache_data
 def get_scaler_stats(_scaler_obj):
-    """Calculates min/max of training data from the Scaler object to set slider limits.
-    The leading underscore tells Streamlit's caching mechanism to ignore the StandardScaler object."""
+    """
+    Calculates min/max of training data range based on the Scaler object,
+    then expands that range by 40% for wider slider inputs.
+    """
+    # 🔴 Define the expansion factor
+    EXPANSION_FACTOR = 2.30  # 1.0 (original) + 0.40 (increase)
 
-    # This is a bit of a hack to retrieve min/max from the scaler
-    n_features = _scaler_obj.n_features_in_  # <-- Changed to _scaler_obj
+    n_features = _scaler_obj.n_features_in_
 
-    # Create an array of -1 (min value of scaled data)
-    min_scaled = np.full((1, n_features), -1.0)
-    max_scaled = np.full((1, n_features), 1.0)
+    # Define the new expanded scaled boundaries
+    # Instead of -1.0 and 1.0, we use -1.4 and 1.4
+    min_scaled = np.full((1, n_features), -EXPANSION_FACTOR)
+    max_scaled = np.full((1, n_features), EXPANSION_FACTOR)
 
-    # Inverse transform to get rough min/max of original data range
-    min_orig = _scaler_obj.inverse_transform(min_scaled)[0]  # <-- Changed to _scaler_obj
-    max_orig = _scaler_obj.inverse_transform(max_scaled)[0]  # <-- Changed to _scaler_obj
+    # Inverse transform the new expanded scaled boundaries to get the new range
+    min_orig = _scaler_obj.inverse_transform(min_scaled)[0]
+    max_orig = _scaler_obj.inverse_transform(max_scaled)[0]
 
     return pd.DataFrame({
         'min': min_orig,
         'max': max_orig,
     }, index=FEATURE_COLS)
 
+
 @st.cache_data
 def predict_baseline(features):
-    """Predicts using the Baseline (Logistic Regression) model. Cached by input features."""
+    """
+    🔴 CHANGE 2: Updated to predict using the Baseline MLP model.
+    """
     features_scaled = X_SCALER.transform(np.array(features).reshape(1, -1))
-    proba = BASELINE_MODEL.predict_proba(features_scaled)[0][1]
-    return float(proba)
 
+    # MLP returns the probability directly (1 output unit, sigmoid activation)
+    proba = BASELINE_MODEL.predict(features_scaled, verbose=0)[0][0]
+
+    return float(proba)
 
 @st.cache_data
 def predict_dl(features):
@@ -87,8 +84,7 @@ st.set_page_config(
 )
 
 st.title("League of Legends 10-Minute Win Predictor 🧙‍♂️")
-st.markdown(
-    "Use the sliders to input the **Blue Team's advantage** (Difference: Blue - Red) at the 10-minute mark and see the predicted probability of a **Blue Team Victory** (blueWins=1).")
+st.markdown("Use the sliders to input the **Blue Team's advantage** (Difference: Blue - Red) at the 10-minute mark and see the predicted probability of a **Blue Team Victory** (blueWins=1).")
 
 # --- Sidebar for Feature Inputs ---
 
@@ -142,7 +138,7 @@ with st.sidebar:
 
 # --- Main Content Tabs ---
 
-tab_baseline, tab_dl = st.tabs(["📊 Baseline Model (Logistic Regression)", "🧠 Deep Learning Model (Autoencoder + MLP)"])
+tab_baseline, tab_dl = st.tabs(["📊 Baseline Model (Simple MLP)", "🧠 Deep Learning Model (Autoencoder + MLP)"])
 
 # Prepare input table for display
 df_input = pd.DataFrame({
@@ -159,7 +155,8 @@ df_input_display = df_input.set_index('Feature')
 # --- Baseline Tab Content ---
 with tab_baseline:
     st.header("Baseline Model Prediction")
-    st.markdown("This prediction uses a simple **Logistic Regression** model.")
+    # 🔴 CHANGE 4: Update text description
+    st.markdown("This prediction uses a simple **Multi-Layer Perceptron (MLP)** model trained directly on the 5 scaled features.")
 
     col_input, col_pred = st.columns(2)
 
@@ -217,7 +214,7 @@ st.markdown(
     ### Model Details:
     - **Data**: High-Diamond Ranked 10-Minute Game Data.
     - **Features**: Differences (Blue - Red) in Gold, Experience, Kills, Dragons, and Deaths.
-    - **Baseline Model**: Logistic Regression.
+    - **Baseline Model**: **Simple MLP** (1 Hidden Layer, ReLU activation, 8 neurons).
     - **DL Model**: Autoencoder (Tanh, 8-dim) $\\rightarrow$ MLP (2 Dense layers, Tanh, BN) $\\rightarrow$ Output (Sigmoid).
     """
 )

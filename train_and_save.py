@@ -1,5 +1,3 @@
-# print("1. Loading and preparing data...")
-
 import pandas as pd
 import keras
 from sklearn.preprocessing import StandardScaler
@@ -8,6 +6,7 @@ from sklearn.linear_model import LogisticRegression
 import pathlib
 import joblib
 import numpy as np
+
 
 # --- Configuration (must match app.py) ---
 FEATURE_COLS = ["gold_diff", "exp_diff", "kills_diff", "dragons_diff", "deaths_diff"]
@@ -57,14 +56,27 @@ X_train_dl_scaled, X_val_dl_scaled, Y_train_dl, Y_val_dl = train_test_split(
     X_scaled, Y_dl, test_size=0.2, random_state=RANDOM_SEED
 )
 
+# --- New Baseline MLP Training Block (Replace Section 2 in train_and_save.py) ---
+print("2. Training and saving Baseline Model (Simple MLP)...")
 
-# --- Train and Save Baseline Model ---
-print("2. Training and saving Baseline Model (Logistic Regression)...")
-baseline_model = LogisticRegression(random_state=RANDOM_SEED, max_iter=1000)
-baseline_model.fit(X_train_scaled, Y_train_base)
-joblib.dump(baseline_model, 'logistic_regression_model.joblib')
+# Define a simple MLP: 1 hidden layer with ReLU, 1 output unit with Sigmoid
+# This uses the standard binary cross-entropy loss for binary classification
+baseline_inputs = keras.Input(shape=(X_scaled.shape[1], ))
+baseline_hidden = keras.layers.Dense(8, activation='relu')(baseline_inputs)
+baseline_outputs = keras.layers.Dense(1, activation='sigmoid')(baseline_hidden)
+baseline_mlp_model = keras.Model(inputs=baseline_inputs, outputs=baseline_outputs)
 
+baseline_mlp_model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['Accuracy'])
 
+# Fit the model (using short epoch count for speed)
+baseline_mlp_model.fit(X_train_scaled, Y_train_base, epochs=100, verbose=0)
+
+# Save the model with the new name
+baseline_mlp_model.save('baseline_mlp_model.keras')
+
+print("   -> Saved baseline model as baseline_mlp_model.keras")
+
+# --- END New Baseline MLP Training Block ---
 # --- Train and Save DL Model Components ---
 print("3. Training Deep Learning Autoencoder...")
 
