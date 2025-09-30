@@ -4,17 +4,40 @@ import numpy as np
 import keras
 import joblib
 
-# --- Configuration ---
+# --- Configuration (Must match training script) ---
 FEATURE_COLS = ["gold_diff", "exp_diff", "kills_diff", "dragons_diff", "deaths_diff"]
+# Factor to expand the slider range (1.40 = 40% increase)
+EXPANSION_FACTOR = 1.40
+
+# --- Custom Objects Dictionary for Keras Loading ---
+# This dictionary resolves the deserialization error by mapping string aliases
+# (like 'mse') back to their specific Keras function objects.
+CUSTOM_OBJECTS = {
+    'mse': keras.metrics.mean_squared_error,
+    'mean_squared_error': keras.metrics.mean_squared_error,
+    # The Baseline MLP uses binary_crossentropy
+    'binary_crossentropy': keras.losses.binary_crossentropy
+}
 
 # --- Load Models (Global Loading for Max Speed) ---
 
 try:
-    # 🔴 CHANGE 1: Load the new Keras Baseline MLP model
-    BASELINE_MODEL = keras.models.load_model('baseline_mlp_model.h5')
+    # Load scikit-learn scaler (joblib format)
     X_SCALER = joblib.load('x_scaler.joblib')
-    DL_ENCODER = keras.models.load_model('dl_encoder.h5')
-    DL_MLP_MODEL = keras.models.load_model('dl_mlp_model.h5')
+
+    # Load Keras models (H5 format) using custom_objects for stability
+    BASELINE_MODEL = keras.models.load_model(
+        'baseline_mlp_model.h5',
+        custom_objects=CUSTOM_OBJECTS
+    )
+    DL_ENCODER = keras.models.load_model(
+        'dl_encoder.h5',
+        custom_objects=CUSTOM_OBJECTS
+    )
+    DL_MLP_MODEL = keras.models.load_model(
+        'dl_mlp_model.h5',
+        custom_objects=CUSTOM_OBJECTS
+    )
 
 except FileNotFoundError as e:
     st.error(
@@ -25,21 +48,14 @@ except Exception as e:
     st.stop()
 
 
-# --- Prediction and Helper Functions (Use st.cache_data) ---
+# --- Helper Functions (Using st.cache_data) ---
 
 @st.cache_data
 def get_scaler_stats(_scaler_obj):
-    """
-    Calculates min/max of training data range based on the Scaler object,
-    then expands that range by 40% for wider slider inputs.
-    """
-    # 🔴 Define the expansion factor
-    EXPANSION_FACTOR = 2.30  # 1.0 (original) + 0.40 (increase)
-
+    """Calculates min/max of training data range, expanded by the factor."""
     n_features = _scaler_obj.n_features_in_
 
-    # Define the new expanded scaled boundaries
-    # Instead of -1.0 and 1.0, we use -1.4 and 1.4
+    # Define the new expanded scaled boundaries [-1.4, 1.4]
     min_scaled = np.full((1, n_features), -EXPANSION_FACTOR)
     max_scaled = np.full((1, n_features), EXPANSION_FACTOR)
 
@@ -55,22 +71,26 @@ def get_scaler_stats(_scaler_obj):
 
 @st.cache_data
 def predict_baseline(features):
-    """
-    🔴 CHANGE 2: Updated to predict using the Baseline MLP model.
-    """
+    """Predicts using the Baseline MLP model."""
     features_scaled = X_SCALER.transform(np.array(features).reshape(1, -1))
 
     # MLP returns the probability directly (1 output unit, sigmoid activation)
     proba = BASELINE_MODEL.predict(features_scaled, verbose=0)[0][0]
 
+    # FIX: Ensure result is a standard Python float
     return float(proba)
+
 
 @st.cache_data
 def predict_dl(features):
-    """Predicts using the Deep Learning (Autoencoder + MLP) model. Cached by input features."""
+    """Predicts using the Deep Learning (Autoencoder + MLP) model."""
     features_scaled = X_SCALER.transform(np.array(features).reshape(1, -1))
     features_encoded = DL_ENCODER.predict(features_scaled, verbose=0)
+
+    # DL MLP returns a 2-unit array (proba of class 0, proba of class 1)
     proba = DL_MLP_MODEL.predict(features_encoded, verbose=0)[0][1]
+
+    # FIX: Ensure result is a standard Python float
     return float(proba)
 
 
@@ -83,14 +103,15 @@ st.set_page_config(
 )
 
 st.title("League of Legends 10-Minute Win Predictor 🧙‍♂️")
-st.markdown("Use the sliders to input the **Blue Team's advantage** (Difference: Blue - Red) at the 10-minute mark and see the predicted probability of a **Blue Team Victory** (blueWins=1).")
+st.markdown(
+    "Use the sliders to input the **Blue Team's advantage** (Difference: Blue - Red) at the 10-minute mark and see the predicted probability of a **Blue Team Victory** (blueWins=1).")
 
 # --- Sidebar for Feature Inputs ---
 
 df_stats = get_scaler_stats(X_SCALER)
 
 with st.sidebar:
-    st.header("Input Features (Blue - Red)")
+    st.header(f"Input Features (Blue - Red, Range Expanded by {int((EXPANSION_FACTOR - 1) * 100)}%)")
 
     # Sliders for user input
     gold_diff = st.slider(
@@ -154,8 +175,8 @@ df_input_display = df_input.set_index('Feature')
 # --- Baseline Tab Content ---
 with tab_baseline:
     st.header("Baseline Model Prediction")
-    # 🔴 CHANGE 4: Update text description
-    st.markdown("This prediction uses a simple **Multi-Layer Perceptron (MLP)** model trained directly on the 5 scaled features.")
+    st.markdown(
+        "This prediction uses a simple **Multi-Layer Perceptron (MLP)** model trained directly on the 5 scaled features.")
 
     col_input, col_pred = st.columns(2)
 
@@ -164,11 +185,8 @@ with tab_baseline:
         st.table(df_input_display)
 
     with col_pred:
-        # Get prediction
         proba_baseline = predict_baseline(input_features)
-
         st.subheader("Predicted Blue Win Probability")
-
         st.metric(label="Blue Team Win Chance", value=f"{proba_baseline * 100:.2f}%")
         st.progress(proba_baseline)
 
@@ -192,11 +210,8 @@ with tab_dl:
         st.table(df_input_display)
 
     with col_pred_dl:
-        # Get prediction
         proba_dl = predict_dl(input_features)
-
         st.subheader("Predicted Blue Win Probability")
-
         st.metric(label="Blue Team Win Chance", value=f"{proba_dl * 100:.2f}%")
         st.progress(proba_dl)
 
