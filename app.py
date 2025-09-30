@@ -228,7 +228,7 @@ st.markdown(
     ### Model Details:
     - **Data**: High-Diamond Ranked 10-Minute Game Data.
     - **Features**: Differences (Blue - Red) in Gold, Experience, Kills, Dragons, and Deaths.
-    - **Baseline Model**: **Simple MLP** (1 Hidden Layer, ReLU activation, 8 neurons).
+    - **Baseline Model**: **Simple MLP** (1 Hidden Layer, Tanh activation, 8 neurons).
     - **DL Model**: Autoencoder (Tanh, 8-dim) $\\rightarrow$ MLP (2 Dense layers, Tanh, BN) $\\rightarrow$ Output (Sigmoid).
     """
 )
